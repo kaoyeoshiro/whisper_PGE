@@ -32,7 +32,7 @@ pip install -r requirements.txt
 
 ## Gerando os executáveis
 
-Execute `python build.py`. O script garante que o PyInstaller esteja instalado, gera `WhisperPGE.exe` e `updater.exe` em modo `--onefile` (sem console) e copia `app/version.json` para `build/app/version.json`. O processo coleta todos os módulos e dados necessários de `torch`, `torchaudio`, `whisper` e dependências relacionadas, eliminando qualquer instalação dinâmica em tempo de execução. Os executáveis finais ficam em `build/`.
+Execute `python build.py`. O script garante que o PyInstaller esteja instalado, gera `WhisperPGE.exe` e `updater.exe` em modo `--onefile` enxuto (sem console) e copia `app/version.json` para `build/app/version.json`. O executável resultante permanece pequeno; na primeira execução ele verifica e instala automaticamente as dependências Python necessárias via `pip`. Os artefatos finais ficam em `build/`.
 
 ```
 python build.py
@@ -40,7 +40,7 @@ python build.py
 
 Após o build, distribua os seguintes arquivos para a máquina do usuário:
 
-- `WhisperPGE.exe` (aplicação principal com todas as dependências empacotadas)
+- `WhisperPGE.exe` (aplicação principal; instala dependências na primeira execução)
 - `updater.exe` (verificador de releases no GitHub)
 - `app/version.json`
 

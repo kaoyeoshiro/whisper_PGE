@@ -15,7 +15,75 @@ import json
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, scrolledtext
 import warnings
+from datetime import datetime
+
 warnings.filterwarnings("ignore")
+
+
+def ensure_runtime_dependencies() -> None:
+    """Ensure heavy dependencies are available; install them if missing."""
+
+    pip_sets = [
+        {
+            "modules": ["torch", "torchaudio"],
+            "packages": ["torch==2.0.1+cpu", "torchaudio==2.0.2+cpu"],
+            "options": ["--extra-index-url", "https://download.pytorch.org/whl/cpu"],
+        },
+        {
+            "modules": ["whisper"],
+            "packages": ["openai-whisper"],
+        },
+        {
+            "modules": ["numpy"],
+            "packages": ["numpy>=1.21.0"],
+        },
+        {
+            "modules": ["requests", "packaging"],
+            "packages": ["requests>=2.31.0", "packaging>=23.2"],
+        },
+        {
+            "modules": ["psutil"],
+            "packages": ["psutil>=5.9.0"],
+        },
+    ]
+
+    log_root = Path(os.getenv("LOCALAPPDATA", Path.home())) / "WhisperPGE" / "logs"
+    log_root.mkdir(parents=True, exist_ok=True)
+    log_file = log_root / "bootstrap.log"
+
+    def log(message: str) -> None:
+        stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        line = f"[{stamp}] {message}\n"
+        print(line, end="")
+        try:
+            with log_file.open("a", encoding="utf-8") as handle:
+                handle.write(line)
+        except Exception:
+            pass
+
+    for bundle in pip_sets:
+        missing = []
+        for module in bundle["modules"]:
+            try:
+                __import__(module)
+            except ImportError:
+                missing.append(module)
+        if not missing:
+            continue
+
+        log(f"Dependências ausentes ({', '.join(missing)}). Instalando {bundle['packages']}...")
+        cmd = [sys.executable, "-m", "pip", "install", "--upgrade"]
+        cmd.extend(bundle.get("options", []))
+        cmd.extend(bundle["packages"])
+        try:
+            subprocess.check_call(cmd)
+            log(f"Instalação concluída: {bundle['packages']}")
+        except subprocess.CalledProcessError as exc:
+            log(f"Falha ao instalar {bundle['packages']}: {exc}")
+            raise
+
+
+ensure_runtime_dependencies()
 
 
 def get_app_version() -> str:

@@ -1,5 +1,6 @@
+
 #!/usr/bin/env python3
-"""Build automation for Whisper PGE executables using PyInstaller."""
+"""Lightweight build automation for Whisper PGE executables."""
 from __future__ import annotations
 
 import os
@@ -38,13 +39,7 @@ def clean_previous_artifacts() -> None:
     BUILD_DIR.mkdir(exist_ok=True)
 
 
-def build_executable(
-    entry: Path,
-    name: str,
-    add_data: list[tuple[Path, str]] | None = None,
-    windowed: bool = False,
-    extra_args: list[str] | None = None,
-) -> Path:
+def build_executable(entry: Path, name: str, add_data: list[tuple[Path, str]] | None = None) -> Path:
     if not entry.exists():
         raise FileNotFoundError(f"Entry point not found: {entry}")
 
@@ -68,12 +63,6 @@ def build_executable(
     if add_data:
         for source, target in add_data:
             cmd.extend(["--add-data", f"{source}{os.pathsep}{target}"])
-
-    if windowed:
-        cmd.append("--noconsole")
-
-    if extra_args:
-        cmd.extend(extra_args)
 
     cmd.append(str(entry))
     run(cmd)
@@ -102,26 +91,12 @@ def main() -> None:
         entry=MAIN_ENTRY,
         name="WhisperPGE",
         add_data=[(VERSION_FILE, "app/version.json")],
-        windowed=True,
-        extra_args=[
-            "--collect-all", "whisper",
-            "--collect-all", "torch",
-            "--collect-all", "torchaudio",
-            "--collect-data", "numpy",
-            "--collect-submodules", "numba",
-            "--collect-submodules", "safetensors",
-        ],
     )
 
     print("[build] Building updater.exe")
     build_executable(
         entry=UPDATER_ENTRY,
         name="updater",
-        windowed=True,
-        extra_args=[
-            "--collect-all", "requests",
-            "--collect-all", "packaging",
-        ],
     )
 
     copy_support_files()
