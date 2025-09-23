@@ -5,3 +5,4 @@ numpy>=1.21.0
 requests>=2.31.0
 packaging>=23.2
 pyinstaller>=6.1
+psutil>=5.9.0

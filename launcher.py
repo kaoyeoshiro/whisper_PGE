@@ -15,6 +15,9 @@ import warnings
 import time
 import tempfile
 import psutil
+import requests
+import zipfile
+from packaging import version
 
 warnings.filterwarnings("ignore")
 
@@ -82,6 +85,150 @@ def get_app_version() -> str:
     return "dev"
 
 APP_VERSION = get_app_version()
+GITHUB_REPO = "kaoyeoshiro/whisper_PGE"
+UPDATE_CHECK_URL = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
+
+def check_for_updates():
+    """Check for newer versions on GitHub"""
+    try:
+        print(f"Verificando atualizações... Versão atual: {APP_VERSION}")
+        response = requests.get(UPDATE_CHECK_URL, timeout=10)
+        if response.status_code == 200:
+            release_data = response.json()
+            latest_version = release_data["tag_name"].lstrip("v")
+
+            if version.parse(latest_version) > version.parse(APP_VERSION):
+                print(f"Nova versão disponível: {latest_version}")
+                return {
+                    "available": True,
+                    "version": latest_version,
+                    "download_url": None,
+                    "release_data": release_data
+                }
+
+        print("Aplicação está atualizada")
+        return {"available": False}
+    except Exception as e:
+        print(f"Erro ao verificar atualizações: {e}")
+        return {"available": False}
+
+def download_and_install_update(release_data):
+    """Download and install update"""
+    try:
+        # Find the installer asset
+        assets = release_data.get("assets", [])
+        installer_asset = None
+
+        for asset in assets:
+            if asset["name"].endswith(".exe") and "Installer" in asset["name"]:
+                installer_asset = asset
+                break
+
+        if not installer_asset:
+            raise Exception("Arquivo de instalação não encontrado no release")
+
+        # Download the new installer
+        download_url = installer_asset["browser_download_url"]
+        temp_dir = Path(tempfile.gettempdir())
+        temp_installer = temp_dir / f"WhisperPGE_Update_{release_data['tag_name']}.exe"
+
+        print(f"Baixando atualização de {download_url}")
+        response = requests.get(download_url, stream=True)
+        response.raise_for_status()
+
+        total_size = int(response.headers.get('content-length', 0))
+        downloaded = 0
+
+        with open(temp_installer, 'wb') as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                if chunk:
+                    f.write(chunk)
+                    downloaded += len(chunk)
+                    if total_size > 0:
+                        progress = (downloaded / total_size) * 100
+                        print(f"Download: {progress:.1f}%", end='\r')
+
+        print(f"\nDownload concluído: {temp_installer}")
+
+        # Run the new installer
+        print("Iniciando instalação da atualização...")
+        subprocess.Popen([str(temp_installer)], shell=True)
+
+        # Exit current instance
+        return True
+
+    except Exception as e:
+        print(f"Erro durante atualização: {e}")
+        return False
+
+def show_update_dialog(update_info):
+    """Show update available dialog"""
+    root = tk.Tk()
+    root.title(f"WhisperPGE v{APP_VERSION} - Atualização Disponível")
+    root.geometry("500x300")
+    root.resizable(False, False)
+
+    # Center window
+    root.update_idletasks()
+    x = (root.winfo_screenwidth() // 2) - (500 // 2)
+    y = (root.winfo_screenheight() // 2) - (300 // 2)
+    root.geometry(f"500x300+{x}+{y}")
+
+    frame = ttk.Frame(root, padding="20")
+    frame.pack(fill=tk.BOTH, expand=True)
+
+    # Title
+    ttk.Label(frame, text="Nova versão disponível!",
+              font=("Arial", 16, "bold")).pack(pady=(0, 10))
+
+    # Version info
+    ttk.Label(frame, text=f"Versão atual: {APP_VERSION}",
+              font=("Arial", 10)).pack(pady=2)
+    ttk.Label(frame, text=f"Nova versão: {update_info['version']}",
+              font=("Arial", 10, "bold")).pack(pady=2)
+
+    # Release notes if available
+    release_notes = update_info.get('release_data', {}).get('body', '')
+    if release_notes:
+        ttk.Label(frame, text="Novidades:", font=("Arial", 10, "bold")).pack(pady=(10, 5))
+
+        text_frame = ttk.Frame(frame)
+        text_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
+
+        text_widget = tk.Text(text_frame, height=6, wrap=tk.WORD, font=("Arial", 9))
+        scrollbar = ttk.Scrollbar(text_frame, orient=tk.VERTICAL, command=text_widget.yview)
+        text_widget.configure(yscrollcommand=scrollbar.set)
+
+        text_widget.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        text_widget.insert('1.0', release_notes[:500] + ('...' if len(release_notes) > 500 else ''))
+        text_widget.config(state=tk.DISABLED)
+
+    # Buttons
+    button_frame = ttk.Frame(frame)
+    button_frame.pack(pady=10)
+
+    user_choice = [None]
+
+    def update_now():
+        user_choice[0] = True
+        root.destroy()
+
+    def skip_update():
+        user_choice[0] = False
+        root.destroy()
+
+    ttk.Button(button_frame, text="Atualizar Agora",
+               command=update_now).pack(side=tk.LEFT, padx=5)
+    ttk.Button(button_frame, text="Pular",
+               command=skip_update).pack(side=tk.LEFT, padx=5)
+
+    # Make update button default
+    root.bind('<Return>', lambda e: update_now())
+
+    root.mainloop()
+    return user_choice[0]
 
 def check_dependencies_simple():
     """Simple dependency check"""
@@ -320,6 +467,20 @@ def main():
         if not create_instance_lock():
             print("Falha ao criar lock de instância.")
             return
+
+        # Check for updates first (only if not dev version)
+        if APP_VERSION != "dev":
+            update_info = check_for_updates()
+            if update_info.get("available"):
+                should_update = show_update_dialog(update_info)
+                if should_update:
+                    print("Iniciando processo de atualização...")
+                    if download_and_install_update(update_info["release_data"]):
+                        print("Atualização iniciada. Fechando aplicação atual.")
+                        remove_instance_lock()
+                        return
+                    else:
+                        print("Falha na atualização. Continuando com versão atual.")
 
         # Check dependencies
         has_deps = check_dependencies_simple()
