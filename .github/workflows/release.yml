@@ -23,18 +23,18 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install torch==2.0.1+cpu torchaudio==2.0.2+cpu --index-url https://download.pytorch.org/whl/cpu
-          pip install openai-whisper>=20231117 numpy>=1.21.0 requests>=2.31.0 packaging>=23.2 pyinstaller>=6.1
+          pip install -r requirements.txt
 
       - name: Build executables
         run: |
           python build.py
 
-      - name: Upload release asset
+      - name: Upload release assets
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            build/WhisperPGE-Installer.exe
+            build/WhisperPGE.exe
+            build/updater.exe
             build/app/version.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
