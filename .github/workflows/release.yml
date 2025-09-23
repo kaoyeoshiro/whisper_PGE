@@ -5,6 +5,9 @@ on:
     tags:
       - 'v*'
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: windows-latest
@@ -31,8 +34,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            build/WhisperPGE.exe
-            build/updater.exe
+            build/WhisperPGE-Installer.exe
             build/app/version.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
