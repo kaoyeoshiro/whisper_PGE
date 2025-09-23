@@ -7,7 +7,6 @@ build/
 dist/
 .pyinstaller-build/
 .pyinstaller-spec/
-*.spec
 .env
 .venv
 *.log
