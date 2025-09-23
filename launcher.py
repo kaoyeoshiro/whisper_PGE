@@ -298,6 +298,7 @@ def install_dependencies():
     status_label.pack(pady=(0, 10))
 
     install_success = [False]
+    user_cancelled = [False]
 
     def install_worker():
         try:
@@ -317,37 +318,56 @@ def install_dependencies():
                     "torch", "torchaudio"
                 ], capture_output=True, text=True)
 
-            status_label.config(text="Instalando Whisper...")
-            root.update()
+            if not user_cancelled[0]:
+                status_label.config(text="Instalando Whisper...")
+                root.update()
 
-            result2 = subprocess.run([
-                sys.executable, "-m", "pip", "install", "--no-cache-dir",
-                "openai-whisper", "numpy", "requests"
-            ], capture_output=True, text=True)
+                result2 = subprocess.run([
+                    sys.executable, "-m", "pip", "install", "--no-cache-dir",
+                    "openai-whisper", "numpy", "requests"
+                ], capture_output=True, text=True)
 
-            if result.returncode == 0 and result2.returncode == 0:
-                install_success[0] = True
-                status_label.config(text="Instalação concluída!")
-                progress.stop()
-                progress.config(mode='determinate', value=100)
+                if result.returncode == 0 and result2.returncode == 0:
+                    install_success[0] = True
+                    if not user_cancelled[0]:
+                        status_label.config(text="Instalação concluída!")
+                        progress.stop()
+                        progress.config(mode='determinate', value=100)
 
-                ttk.Button(frame, text="Continuar",
-                          command=root.destroy).pack(pady=10)
-            else:
-                status_label.config(text="Erro na instalação")
+                        ttk.Button(frame, text="Continuar",
+                                  command=root.destroy).pack(pady=10)
+                else:
+                    if not user_cancelled[0]:
+                        status_label.config(text="Erro na instalação")
+                        ttk.Button(frame, text="Fechar",
+                                  command=root.destroy).pack(pady=10)
+
+        except Exception as e:
+            if not user_cancelled[0]:
+                status_label.config(text=f"Erro: {str(e)}")
                 ttk.Button(frame, text="Fechar",
                           command=root.destroy).pack(pady=10)
 
-        except Exception as e:
-            status_label.config(text=f"Erro: {str(e)}")
-            ttk.Button(frame, text="Fechar",
-                      command=root.destroy).pack(pady=10)
+    def on_cancel():
+        user_cancelled[0] = True
+        root.destroy()
+
+    # Add cancel button
+    cancel_button = ttk.Button(frame, text="Cancelar", command=on_cancel)
+    cancel_button.pack(pady=10)
+
+    # Handle window close
+    root.protocol("WM_DELETE_WINDOW", on_cancel)
 
     thread = threading.Thread(target=install_worker, daemon=True)
     thread.start()
 
-    root.mainloop()
-    return install_success[0]
+    try:
+        root.mainloop()
+    except KeyboardInterrupt:
+        user_cancelled[0] = True
+
+    return install_success[0] and not user_cancelled[0]
 
 # === WHISPER APPLICATION CODE ===
 
@@ -512,9 +532,14 @@ def main():
 
         if not has_deps:
             print("Instalando dependências...")
-            success = install_dependencies()
-            if not success:
-                print("Instalação falhou")
+            try:
+                success = install_dependencies()
+                if not success:
+                    print("Instalação foi cancelada ou falhou")
+                    remove_instance_lock()
+                    return
+            except Exception as e:
+                print(f"Erro durante instalação de dependências: {e}")
                 remove_instance_lock()
                 return
 
