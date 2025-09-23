@@ -14,10 +14,21 @@ from pathlib import Path
 import warnings
 import time
 import tempfile
-import psutil
-import requests
-import zipfile
-from packaging import version
+
+# Optional imports for enhanced functionality
+try:
+    import psutil
+    PSUTIL_AVAILABLE = True
+except ImportError:
+    PSUTIL_AVAILABLE = False
+
+try:
+    import requests
+    import zipfile
+    from packaging import version
+    UPDATE_AVAILABLE = True
+except ImportError:
+    UPDATE_AVAILABLE = False
 
 warnings.filterwarnings("ignore")
 
@@ -34,13 +45,22 @@ def is_already_running():
             pid = int(f.read().strip())
 
         # Check if process is still running
-        if psutil.pid_exists(pid):
+        if PSUTIL_AVAILABLE:
+            if psutil.pid_exists(pid):
+                try:
+                    proc = psutil.Process(pid)
+                    if 'WhisperPGE' in proc.name():
+                        return True
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    pass
+        else:
+            # Fallback method without psutil (less reliable)
+            import signal
             try:
-                proc = psutil.Process(pid)
-                if 'WhisperPGE' in proc.name():
-                    return True
-            except (psutil.NoSuchProcess, psutil.AccessDenied):
-                pass
+                os.kill(pid, 0)  # Signal 0 checks if process exists
+                return True  # Process exists
+            except (OSError, ProcessLookupError):
+                pass  # Process doesn't exist
 
         # Remove stale lock file
         INSTANCE_LOCK_FILE.unlink()
@@ -90,6 +110,10 @@ UPDATE_CHECK_URL = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
 
 def check_for_updates():
     """Check for newer versions on GitHub"""
+    if not UPDATE_AVAILABLE:
+        print("Bibliotecas de atualização não disponíveis")
+        return {"available": False}
+
     try:
         print(f"Verificando atualizações... Versão atual: {APP_VERSION}")
         response = requests.get(UPDATE_CHECK_URL, timeout=10)
@@ -468,8 +492,8 @@ def main():
             print("Falha ao criar lock de instância.")
             return
 
-        # Check for updates first (only if not dev version)
-        if APP_VERSION != "dev":
+        # Check for updates first (only if not dev version and update libraries available)
+        if APP_VERSION != "dev" and UPDATE_AVAILABLE:
             update_info = check_for_updates()
             if update_info.get("available"):
                 should_update = show_update_dialog(update_info)
