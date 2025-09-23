@@ -32,7 +32,7 @@ pip install -r requirements.txt
 
 ## Gerando os executáveis
 
-Execute `python build.py`. O script garante que o PyInstaller esteja instalado, gera `WhisperPGE.exe` e `updater.exe` em modo `--onefile` e copia `app/version.json` para `build/app/version.json`. Os executáveis finais ficam em `build/`.
+Execute `python build.py`. O script garante que o PyInstaller esteja instalado, gera `WhisperPGE.exe` e `updater.exe` em modo `--onefile` (sem console) e copia `app/version.json` para `build/app/version.json`. O processo coleta todos os módulos e dados necessários de `torch`, `torchaudio`, `whisper` e dependências relacionadas, eliminando qualquer instalação dinâmica em tempo de execução. Os executáveis finais ficam em `build/`.
 
 ```
 python build.py
@@ -40,8 +40,8 @@ python build.py
 
 Após o build, distribua os seguintes arquivos para a máquina do usuário:
 
-- `WhisperPGE.exe`
-- `updater.exe`
+- `WhisperPGE.exe` (aplicação principal com todas as dependências empacotadas)
+- `updater.exe` (verificador de releases no GitHub)
 - `app/version.json`
 
 Mantenha-os na mesma pasta (por exemplo `C:\Program Files\WhisperPGE` ou `%USERPROFILE%\WhisperPGE`).
@@ -78,4 +78,3 @@ Para desinstalar o atualizador automático, remova o valor `WhisperPGE-Updater` 
 - **Erro ao baixar atualização**: verifique o log em `%LOCALAPPDATA%\WhisperPGE\logs\updater.log` e confirme conectividade com GitHub.
 - **Permissões**: caso o registro no Run key falhe, execute `updater.exe` em uma sessão com privilégios suficientes.
 - **FFmpeg ausente**: instale o FFmpeg e garanta que o executável esteja no `PATH` antes de usar `WhisperPGE.exe`.
-

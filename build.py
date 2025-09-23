@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
-"""Build automation for WhisperPGE Installer using PyInstaller."""
+"""Build automation for Whisper PGE executables using PyInstaller."""
+from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import sys
@@ -10,7 +12,11 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 DIST_DIR = PROJECT_ROOT / "dist"
 BUILD_DIR = PROJECT_ROOT / "build"
 PYI_BUILD_DIR = PROJECT_ROOT / ".pyinstaller-build"
+PYI_SPEC_DIR = PROJECT_ROOT / ".pyinstaller-spec"
 VERSION_FILE = PROJECT_ROOT / "app" / "version.json"
+
+MAIN_ENTRY = PROJECT_ROOT / "main.py"
+UPDATER_ENTRY = PROJECT_ROOT / "updater.py"
 
 
 def run(cmd: list[str]) -> None:
@@ -26,10 +32,59 @@ def ensure_pyinstaller() -> None:
 
 
 def clean_previous_artifacts() -> None:
-    for path in (DIST_DIR, PYI_BUILD_DIR):
+    for path in (DIST_DIR, PYI_BUILD_DIR, PYI_SPEC_DIR):
         if path.exists():
             shutil.rmtree(path)
     BUILD_DIR.mkdir(exist_ok=True)
+
+
+def build_executable(
+    entry: Path,
+    name: str,
+    add_data: list[tuple[Path, str]] | None = None,
+    windowed: bool = False,
+    extra_args: list[str] | None = None,
+) -> Path:
+    if not entry.exists():
+        raise FileNotFoundError(f"Entry point not found: {entry}")
+
+    cmd = [
+        sys.executable,
+        "-m",
+        "PyInstaller",
+        "--noconfirm",
+        "--clean",
+        "--onefile",
+        "--name",
+        name,
+        "--distpath",
+        str(DIST_DIR),
+        "--workpath",
+        str(PYI_BUILD_DIR),
+        "--specpath",
+        str(PYI_SPEC_DIR),
+    ]
+
+    if add_data:
+        for source, target in add_data:
+            cmd.extend(["--add-data", f"{source}{os.pathsep}{target}"])
+
+    if windowed:
+        cmd.append("--noconsole")
+
+    if extra_args:
+        cmd.extend(extra_args)
+
+    cmd.append(str(entry))
+    run(cmd)
+
+    built_path = DIST_DIR / f"{name}.exe"
+    if not built_path.exists():
+        raise FileNotFoundError(f"Expected artifact missing: {built_path}")
+
+    destination = BUILD_DIR / built_path.name
+    shutil.move(str(built_path), destination)
+    return destination
 
 
 def copy_support_files() -> None:
@@ -42,35 +97,40 @@ def main() -> None:
     ensure_pyinstaller()
     clean_previous_artifacts()
 
-    print("[build] Building WhisperPGE-Installer.exe")
-    launcher_spec = PROJECT_ROOT / "launcher_optimized.spec"
+    print("[build] Building WhisperPGE.exe")
+    build_executable(
+        entry=MAIN_ENTRY,
+        name="WhisperPGE",
+        add_data=[(VERSION_FILE, "app/version.json")],
+        windowed=True,
+        extra_args=[
+            "--collect-all", "whisper",
+            "--collect-all", "torch",
+            "--collect-all", "torchaudio",
+            "--collect-data", "numpy",
+            "--collect-submodules", "numba",
+            "--collect-submodules", "safetensors",
+        ],
+    )
 
-    cmd = [
-        sys.executable,
-        "-m",
-        "PyInstaller",
-        "--clean",
-        "--distpath",
-        str(DIST_DIR),
-        "--workpath",
-        str(PYI_BUILD_DIR),
-        str(launcher_spec)
-    ]
-    run(cmd)
-
-    # Move executable to build directory
-    launcher_exe = DIST_DIR / "WhisperPGE-Installer.exe"
-    if launcher_exe.exists():
-        shutil.move(str(launcher_exe), BUILD_DIR / "WhisperPGE-Installer.exe")
+    print("[build] Building updater.exe")
+    build_executable(
+        entry=UPDATER_ENTRY,
+        name="updater",
+        windowed=True,
+        extra_args=[
+            "--collect-all", "requests",
+            "--collect-all", "packaging",
+        ],
+    )
 
     copy_support_files()
 
-    # Clean temporary directories
-    for path in (DIST_DIR, PYI_BUILD_DIR):
+    for path in (DIST_DIR, PYI_BUILD_DIR, PYI_SPEC_DIR):
         if path.exists():
             shutil.rmtree(path)
 
-    print(f"[build] WhisperPGE-Installer.exe available in {BUILD_DIR}")
+    print(f"[build] Artifacts available in {BUILD_DIR}")
 
 
 if __name__ == "__main__":
