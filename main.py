@@ -9,6 +9,7 @@ Requisitos: Python 3.10+, openai-whisper, torch, ffmpeg
 import os
 import sys
 import threading
+import importlib
 import subprocess
 from pathlib import Path
 import json
@@ -72,13 +73,25 @@ def ensure_runtime_dependencies() -> None:
             continue
 
         log(f"Dependências ausentes ({', '.join(missing)}). Instalando {bundle['packages']}...")
-        cmd = [sys.executable, "-m", "pip", "install", "--upgrade"]
-        cmd.extend(bundle.get("options", []))
-        cmd.extend(bundle["packages"])
+        args = ["install", "--upgrade"]
+        args.extend(bundle.get("options", []))
+        args.extend(bundle["packages"])
         try:
-            subprocess.check_call(cmd)
+            from pip._internal.cli.main import main as pip_main
+
+            result = pip_main(args)
+            if result != 0:
+                raise RuntimeError(f"pip returned {result}")
+
+            importlib.invalidate_caches()
+            for module in bundle["modules"]:
+                try:
+                    __import__(module)
+                except ImportError:
+                    raise RuntimeError(f"Falha ao importar {module} após instalação")
+
             log(f"Instalação concluída: {bundle['packages']}")
-        except subprocess.CalledProcessError as exc:
+        except Exception as exc:
             log(f"Falha ao instalar {bundle['packages']}: {exc}")
             raise
 
