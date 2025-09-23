@@ -300,51 +300,99 @@ def install_dependencies():
     install_success = [False]
     user_cancelled = [False]
 
+    def run_pip_command(cmd, timeout=300):
+        """Run pip command with timeout and better error handling"""
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+            )
+            return result
+        except subprocess.TimeoutExpired:
+            print(f"Comando timeout após {timeout} segundos: {' '.join(cmd)}")
+            return None
+        except Exception as e:
+            print(f"Erro ao executar comando: {e}")
+            return None
+
     def install_worker():
         try:
-            status_label.config(text="Instalando PyTorch...")
+            if user_cancelled[0]:
+                return
+
+            # Try installing PyTorch with CPU support
+            status_label.config(text="Instalando PyTorch (pode demorar alguns minutos)...")
             root.update()
 
-            result = subprocess.run([
+            torch_cmd = [
                 sys.executable, "-m", "pip", "install", "--no-cache-dir",
                 "torch==2.0.1+cpu", "torchaudio==2.0.2+cpu",
                 "--index-url", "https://download.pytorch.org/whl/cpu"
-            ], capture_output=True, text=True)
+            ]
 
-            if result.returncode != 0:
+            result = run_pip_command(torch_cmd, timeout=600)  # 10 minutes for PyTorch
+
+            if not result or result.returncode != 0:
+                if user_cancelled[0]:
+                    return
+
                 # Fallback to standard torch
-                result = subprocess.run([
-                    sys.executable, "-m", "pip", "install", "--no-cache-dir",
-                    "torch", "torchaudio"
-                ], capture_output=True, text=True)
-
-            if not user_cancelled[0]:
-                status_label.config(text="Instalando Whisper...")
+                status_label.config(text="Tentando instalação alternativa do PyTorch...")
                 root.update()
 
-                result2 = subprocess.run([
+                torch_fallback_cmd = [
                     sys.executable, "-m", "pip", "install", "--no-cache-dir",
-                    "openai-whisper", "numpy", "requests"
-                ], capture_output=True, text=True)
+                    "torch", "torchaudio"
+                ]
+                result = run_pip_command(torch_fallback_cmd, timeout=600)
 
-                if result.returncode == 0 and result2.returncode == 0:
+            # Install Whisper and other dependencies
+            if not user_cancelled[0] and result and result.returncode == 0:
+                status_label.config(text="Instalando Whisper e dependências...")
+                root.update()
+
+                whisper_cmd = [
+                    sys.executable, "-m", "pip", "install", "--no-cache-dir",
+                    "openai-whisper", "numpy", "requests", "packaging"
+                ]
+
+                result2 = run_pip_command(whisper_cmd, timeout=300)  # 5 minutes for Whisper
+
+                if result2 and result2.returncode == 0:
                     install_success[0] = True
                     if not user_cancelled[0]:
                         status_label.config(text="Instalação concluída!")
                         progress.stop()
                         progress.config(mode='determinate', value=100)
 
+                        def continue_app():
+                            root.destroy()
+
                         ttk.Button(frame, text="Continuar",
-                                  command=root.destroy).pack(pady=10)
+                                  command=continue_app).pack(pady=10)
                 else:
                     if not user_cancelled[0]:
-                        status_label.config(text="Erro na instalação")
+                        error_msg = "Erro na instalação do Whisper"
+                        if result2:
+                            error_msg += f"\nCódigo de erro: {result2.returncode}"
+                        status_label.config(text=error_msg)
                         ttk.Button(frame, text="Fechar",
                                   command=root.destroy).pack(pady=10)
+            else:
+                if not user_cancelled[0]:
+                    error_msg = "Erro na instalação do PyTorch"
+                    if result:
+                        error_msg += f"\nCódigo de erro: {result.returncode}"
+                    status_label.config(text=error_msg)
+                    ttk.Button(frame, text="Fechar",
+                              command=root.destroy).pack(pady=10)
 
         except Exception as e:
             if not user_cancelled[0]:
-                status_label.config(text=f"Erro: {str(e)}")
+                status_label.config(text=f"Erro inesperado: {str(e)}")
                 ttk.Button(frame, text="Fechar",
                           command=root.destroy).pack(pady=10)
 
@@ -536,8 +584,24 @@ def main():
                 success = install_dependencies()
                 if not success:
                     print("Instalação foi cancelada ou falhou")
-                    remove_instance_lock()
-                    return
+
+                    # Ask user if they want to continue without dependencies
+                    try:
+                        response = messagebox.askyesno(
+                            "Dependências não instaladas",
+                            "A instalação das dependências falhou ou foi cancelada.\n\n"
+                            "Deseja continuar mesmo assim? A aplicação pode não funcionar corretamente.",
+                            icon="warning"
+                        )
+                        if not response:
+                            remove_instance_lock()
+                            return
+                        else:
+                            print("Continuando sem dependências completas...")
+                    except:
+                        # If messagebox fails, just exit
+                        remove_instance_lock()
+                        return
             except Exception as e:
                 print(f"Erro durante instalação de dependências: {e}")
                 remove_instance_lock()
