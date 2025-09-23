@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(tasklist)",
+      "Bash(findstr:*)",
+      "Bash(dir:*)",
+      "Bash(mkdir:*)",
+      "Bash(cp:*)",
+      "Bash(python:*)",
+      "Bash(\"./WhisperPGE-Installer.exe\")",
+      "Bash(taskkill:*)",
+      "Bash(\".\\WhisperPGE-Installer.exe\")",
+      "Bash(./WhisperPGE-Installer.exe)",
+      "Bash(pip install:*)",
+      "Bash(git init:*)",
+      "Bash(git remote add:*)",
+      "Bash(git config:*)",
+      "Bash(git add:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

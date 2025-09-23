@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+build/
+dist/
+.pyinstaller-build/
+.pyinstaller-spec/
+*.spec
+.env
+.venv
+*.log
+.sonarlint/
+.DS_Store
+Thumbs.db
