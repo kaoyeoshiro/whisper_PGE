@@ -73,25 +73,19 @@ def ensure_runtime_dependencies() -> None:
             continue
 
         log(f"Dependências ausentes ({', '.join(missing)}). Instalando {bundle['packages']}...")
-        args = ["install", "--upgrade"]
-        args.extend(bundle.get("options", []))
-        args.extend(bundle["packages"])
+        cmd = [sys.executable, "-m", "pip", "install", "--upgrade"]
+        cmd.extend(bundle.get("options", []))
+        cmd.extend(bundle["packages"])
         try:
-            from pip._internal.cli.main import main as pip_main
-
-            result = pip_main(args)
-            if result != 0:
-                raise RuntimeError(f"pip returned {result}")
-
+            subprocess.check_call(cmd)
             importlib.invalidate_caches()
             for module in bundle["modules"]:
                 try:
                     __import__(module)
                 except ImportError:
                     raise RuntimeError(f"Falha ao importar {module} após instalação")
-
             log(f"Instalação concluída: {bundle['packages']}")
-        except Exception as exc:
+        except subprocess.CalledProcessError as exc:
             log(f"Falha ao instalar {bundle['packages']}: {exc}")
             raise
 
